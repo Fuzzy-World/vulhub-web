@@ -21,10 +21,31 @@ static_dir = os.path.join(config.BASE_DIR, "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
+_scheduler = None
+
+
 @app.on_event("startup")
 def startup():
+    global _scheduler
     init_db()
     _cleanup_stale_statuses()
+    # Start scheduled tasks (scan, cleanup, idle check)
+    try:
+        from app.services.scheduler_service import SchedulerService
+        _scheduler = SchedulerService()
+        _scheduler.start()
+    except Exception:
+        pass
+
+
+@app.on_event("shutdown")
+def shutdown():
+    global _scheduler
+    if _scheduler:
+        try:
+            _scheduler.stop()
+        except Exception:
+            pass
 
 
 def _cleanup_stale_statuses():
@@ -55,13 +76,6 @@ async def login_page():
 
 
 if __name__ == "__main__":
-    try:
-        from app.services.scheduler_service import SchedulerService
-        scheduler = SchedulerService()
-        scheduler.start()
-    except Exception:
-        print("[WARN] Scheduler failed to start, scheduled tasks unavailable")
-
     port = config.DEFAULT_SERVER_PORT
     try:
         from app.database import SessionLocal

@@ -14,14 +14,6 @@ from app import config
 
 
 if __name__ == "__main__":
-    # Start scheduled tasks
-    try:
-        from app.services.scheduler_service import SchedulerService
-        scheduler = SchedulerService()
-        scheduler.start()
-    except Exception:
-        print("[WARN] Scheduler failed to start, scheduled tasks unavailable")
-
     # Load port from database config if available
     port = config.DEFAULT_SERVER_PORT
     try:

@@ -41,3 +41,9 @@ docker-compose.override.yml
 # Logs
 *.log
 logs/
+
+# Deploy scripts (local only)
+*deploy*.py
+*check*.py
+*verify*.py
+*redeploy*.py

@@ -1,9 +1,13 @@
 import os
 import re
 import yaml
+import subprocess
+import logging
 from datetime import datetime
 from app.database import SessionLocal
 from app.models import Vuln, SystemConfig
+
+logger = logging.getLogger(__name__)
 
 CATEGORY_MAP = {
     "log4j": "log4j", "log4j2": "log4j",
@@ -107,6 +111,17 @@ def scan_vulhub_directory() -> dict:
         root_path = config_row.config_value
         if not os.path.isdir(root_path):
             return {"success": False, "message": f"Directory not found: {root_path}"}
+
+        # git pull to sync latest Vulhub
+        if os.path.isdir(os.path.join(root_path, ".git")):
+            try:
+                result = subprocess.run(
+                    ["git", "-C", root_path, "pull", "--ff-only"],
+                    capture_output=True, text=True, timeout=60
+                )
+                logger.info(f"git pull: {result.stdout.strip()}")
+            except Exception as e:
+                logger.warning(f"git pull failed: {e}")
 
         batch_id = int(datetime.now().timestamp())
         found_paths = set()
