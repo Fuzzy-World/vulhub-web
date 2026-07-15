@@ -2,6 +2,10 @@ import json
 import asyncio
 import subprocess
 import shutil
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     import docker
@@ -76,40 +80,87 @@ class DockerService:
             }
 
     def cleanup(self, remove_stopped: bool = False, remove_dangling: bool = False,
-                remove_cache: bool = False) -> dict:
+                remove_cache: bool = False, vulhub_root: str = None) -> dict:
+        """Clean up Docker resources. Scoped to Vulhub containers only."""
         result = {"removed_containers": 0, "removed_images": 0, "freed_gb": 0}
-        if not self.client:
-            return result
 
-        try:
-            if remove_stopped:
-                containers = self.client.containers.list(all=True)
-                for c in containers:
-                    if c.status != "running":
-                        try:
-                            c.remove(force=True)
-                            result["removed_containers"] += 1
-                        except Exception:
-                            pass
-
-            if remove_dangling:
-                images = self.client.images.list(filters={"dangling": True})
-                for img in images:
+        if remove_stopped:
+            # Only remove stopped containers that belong to Vulhub projects
+            vulhub_ids = self._get_all_vulhub_container_ids(vulhub_root)
+            if vulhub_ids:
+                for cid in vulhub_ids:
                     try:
-                        self.client.images.remove(img.id, force=True)
-                        result["removed_images"] += 1
-                    except Exception:
-                        pass
+                        insp = subprocess.run(
+                            ["docker", "inspect", "--format", "{{.State.Status}}", cid],
+                            capture_output=True, text=True, timeout=10,
+                        )
+                        if insp.returncode == 0 and insp.stdout.strip() in ("exited", "dead", "created"):
+                            subprocess.run(
+                                ["docker", "rm", "-f", cid],
+                                capture_output=True, timeout=10,
+                            )
+                            result["removed_containers"] += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to remove vulhub container {cid[:12]}: {e}")
 
-            if remove_cache:
+        if remove_dangling:
+            # docker image prune only removes <none>:<none> images — safe, standard
+            try:
+                proc = subprocess.run(
+                    ["docker", "image", "prune", "-f"],
+                    capture_output=True, text=True, timeout=60,
+                )
+                logger.info(f"docker image prune: {proc.stdout.strip()}")
+                result["removed_images"] = 1  # non-zero to indicate action was taken
+            except Exception as e:
+                logger.warning(f"Image prune failed: {e}")
+
+        if remove_cache:
+            # docker builder prune cleans build cache only
+            try:
+                proc = subprocess.run(
+                    ["docker", "builder", "prune", "-f"],
+                    capture_output=True, text=True, timeout=60,
+                )
+                logger.info(f"docker builder prune: {proc.stdout.strip()}")
+                if proc.returncode == 0:
+                    result["freed_gb"] = 0.01
+            except Exception as e:
+                logger.warning(f"Builder prune failed: {e}")
+
+        return result
+
+    def _get_all_vulhub_container_ids(self, vulhub_root: str = None) -> set:
+        """Get container IDs from all Vulhub compose projects."""
+        if not vulhub_root:
+            from app.database import SessionLocal
+            from app.models import SystemConfig
+            db = SessionLocal()
+            try:
+                row = db.query(SystemConfig).filter_by(config_key="vulhub_root_path").first()
+                if row and row.config_value:
+                    vulhub_root = row.config_value
+            finally:
+                db.close()
+        if not vulhub_root or not os.path.isdir(vulhub_root):
+            return set()
+
+        ids = set()
+        for dirpath, dirnames, filenames in os.walk(vulhub_root):
+            if "docker-compose.yml" in filenames or "docker-compose.yaml" in filenames:
                 try:
-                    self.client.images.prune()
+                    result = subprocess.run(
+                        _get_compose_cmd() + ["-p", os.path.basename(dirpath), "ps", "-q"],
+                        cwd=dirpath,
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    if result.returncode == 0:
+                        for line in result.stdout.strip().split("\n"):
+                            if line.strip():
+                                ids.add(line.strip())
                 except Exception:
                     pass
-
-            return result
-        except Exception as e:
-            return {"error": str(e)}
+        return ids
 
     def destroy_all_running(self) -> dict:
         if not self.client:
