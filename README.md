@@ -44,41 +44,51 @@ Designed for security researchers, penetration testers, and educators who need t
 ### Prerequisites
 
 - Python 3.9+
-- Docker and Docker Compose
-- [Vulhub](https://github.com/vulhub/vulhub) repository clone (optional, can be set later)
+- Docker and Docker Compose (on the host)
+- [Vulhub](https://github.com/vulhub/vulhub) — clone it to a directory of your choice
+  ```bash
+  git clone https://github.com/vulhub/vulhub.git /opt/vulhub
+  ```
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/vulhub-web.git
+# 1. Clone Vulhub (the vulnerability environments)
+git clone https://github.com/vulhub/vulhub.git /opt/vulhub
+
+# 2. Clone Vulhub-Web (the management platform)
+git clone https://github.com/Fuzzy-World/vulhub-web.git
 cd vulhub-web
 
-# Create virtual environment
+# 3. Create virtual environment
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install dependencies
+# 4. Install dependencies
 pip install -r requirements.txt
 
-# Run the server
+# 5. Run the server
 python run.py
 ```
 
-Open `http://localhost:8088` in your browser. Set an admin password on first visit, then configure your Vulhub root path in Settings.
+Open `http://localhost:8088`, set admin password, then go to Settings and set **Vulhub Root Path** to your Vulhub clone directory (e.g. `/opt/vulhub`).
 
 ### Docker Deployment
 
+Vulhub-Web image does **not** include Vulhub itself. You must mount it from the host:
+
 ```bash
-# Build and run with docker-compose
+# Build and run with docker-compose (edit vulhub path first)
 docker compose up -d
 
-# Or build manually
-docker build -t vulhub-web .
+# Or run manually
 docker run -d \
+  --name vulhub-web \
   -p 8088:8088 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /path/to/vulhub:/vulhub:ro \
+  -v ./data:/app/data \
+  vulhub-web
   -e VULHUB_ROOT_PATH=/vulhub \
   vulhub-web
 ```
