@@ -136,7 +136,13 @@ class DockerService:
                     capture_output=True, text=True, timeout=60,
                 )
                 logger.info(f"docker image prune: {proc.stdout.strip()}")
-                result["removed_images"] = 1  # non-zero to indicate action was taken
+                # Parse "Total reclaimed space: 0B" / "Deleted Images: ..."
+                output = proc.stdout.strip()
+                if "Total reclaimed space: 0B" in output:
+                    result["removed_images"] = 0
+                else:
+                    # Count "deleted:" lines
+                    result["removed_images"] = output.count("deleted:")
             except Exception as e:
                 logger.warning(f"Image prune failed: {e}")
 
@@ -148,8 +154,9 @@ class DockerService:
                     capture_output=True, text=True, timeout=60,
                 )
                 logger.info(f"docker builder prune: {proc.stdout.strip()}")
-                if proc.returncode == 0:
-                    result["freed_gb"] = 0.01
+                output = proc.stdout.strip()
+                if "Total:\t0B" not in output and "Total:\t" in output:
+                    result["freed_gb"] = 0.01  # non-zero to indicate cache was cleared
             except Exception as e:
                 logger.warning(f"Builder prune failed: {e}")
 
