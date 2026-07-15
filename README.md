@@ -132,8 +132,11 @@ vulhub-web/
 ├── data/                   # SQLite database (auto-created)
 ├── run.py                  # Entry point
 ├── requirements.txt
-├── Dockerfile
-└── docker-compose.yml
+├── README.md
+├── README.zh-CN.md
+├── LICENSE
+├── CONTRIBUTING.md
+└── CHANGELOG.md
 ```
 
 ## API Endpoints
