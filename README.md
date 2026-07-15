@@ -75,33 +75,6 @@ python run.py
 
 Open `http://localhost:8088`, set admin password, then go to Settings and set **Vulhub Root Path** to `../vulhub` (relative path works since they're siblings).
 
-### Docker Deployment
-
-Vulhub-Web image does **not** include Vulhub itself. Use the sibling directory layout:
-
-```
-~/work/
-├── vulhub/        ← git clone https://github.com/vulhub/vulhub
-└── Vulhub-Web/    ← this repo
-    └── docker-compose.yml
-```
-
-Then from inside `Vulhub-Web/`:
-
-```bash
-docker compose up -d
-```
-
-This mounts:
-- `../vulhub` → `/vulhub` (read-only) inside the container
-- `/var/run/docker.sock` → host Docker socket
-- `./data` → SQLite persistence
-
-Open `http://localhost:8088` and set **Vulhub Root Path** to `/vulhub` in Settings.
-  -e VULHUB_ROOT_PATH=/vulhub \
-  vulhub-web
-```
-
 ## Architecture
 
 ```

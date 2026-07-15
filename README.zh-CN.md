@@ -76,20 +76,6 @@ python run.py
 
 打开 `http://localhost:8088`，首次访问设置管理员密码，然后在「系统设置」中将「Vulhub 根目录」设为 `../vulhub`。
 
-### Docker 部署
-
-```bash
-# 在 Vulhub-Web 目录下执行
-docker compose up -d
-```
-
-这会自动挂载：
-- `../vulhub` → `/vulhub`（只读）
-- 宿主机 `/var/run/docker.sock`
-- `./data` → SQLite 数据库持久化
-
-打开 `http://localhost:8088`，在设置中将 Vulhub 根路径设为 `/vulhub`。
-
 ---
 
 ## 架构
@@ -157,8 +143,6 @@ Vulhub-Web/
 │       └── terminal.js     # Web 终端（xterm.js + WebSocket）
 ├── data/                   # 运行时数据库（自动生成，不入仓库）
 ├── run.py                  # 应用入口
-├── Dockerfile
-├── docker-compose.yml
 ├── requirements.txt
 ├── README.md               # 英文文档
 ├── README.zh-CN.md         # 中文文档（本文件）
