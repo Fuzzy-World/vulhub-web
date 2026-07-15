@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  vulhub-web:
+    build: .
+    container_name: vulhub-web
+    ports:
+      - "8088:8088"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+      - ${VULHUB_ROOT_PATH:-/opt/vulhub}:/vulhub:ro
+    environment:
+      - VULHUB_ROOT_PATH=/vulhub
+    restart: unless-stopped
