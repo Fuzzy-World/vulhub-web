@@ -43,41 +43,66 @@ class DockerService:
     def get_info(self) -> dict:
         if not self.client:
             return {
-                "disk_usage_gb": 0,
-                "total_images": 0,
-                "running_containers": 0,
-                "stopped_containers": 0,
+                "disk_usage_gb": 0, "total_images": 0,
+                "running_containers": 0, "stopped_containers": 0,
                 "dangling_images": 0,
             }
         try:
+            vulhub_root = self._get_vulhub_root()
             images = self.client.images.list()
             containers = self.client.containers.list(all=True)
-            running = [c for c in containers if c.status == "running"]
-            stopped = [c for c in containers if c.status != "running"]
+
+            # Filter to Vulhub-related images only
+            vulhub_images = [
+                i for i in images
+                if any("vulhub/" in (t or "") for t in i.tags)
+            ]
             dangling = [i for i in images if not i.tags]
+
+            # Filter to Vulhub-related containers only
+            vulhub_containers = []
+            non_vulhub_containers = []
+            for c in containers:
+                labels = c.labels or {}
+                compose_dir = labels.get("com.docker.compose.project.working_dir", "")
+                if vulhub_root and compose_dir and compose_dir.startswith(vulhub_root):
+                    vulhub_containers.append(c)
+                else:
+                    non_vulhub_containers.append(c)
+            running = [c for c in vulhub_containers if c.status == "running"]
+            stopped = [c for c in vulhub_containers if c.status != "running"]
 
             disk_usage = 0
             try:
-                disk_usage = sum(img.attrs.get("Size", 0) for img in images) / (1024**3)
+                disk_usage = sum(img.attrs.get("Size", 0) for img in vulhub_images) / (1024**3)
             except Exception:
                 pass
 
             return {
                 "disk_usage_gb": round(disk_usage, 2),
-                "total_images": len(images),
+                "total_images": len(vulhub_images),
                 "running_containers": len(running),
                 "stopped_containers": len(stopped),
                 "dangling_images": len(dangling),
             }
         except Exception as e:
             return {
-                "disk_usage_gb": 0,
-                "total_images": 0,
-                "running_containers": 0,
-                "stopped_containers": 0,
-                "dangling_images": 0,
-                "error": str(e),
+                "disk_usage_gb": 0, "total_images": 0,
+                "running_containers": 0, "stopped_containers": 0,
+                "dangling_images": 0, "error": str(e),
             }
+
+    @staticmethod
+    def _get_vulhub_root() -> str:
+        try:
+            from app.database import SessionLocal
+            from app.models import SystemConfig
+            db = SessionLocal()
+            row = db.query(SystemConfig).filter_by(config_key="vulhub_root_path").first()
+            db.close()
+            return row.config_value if row and row.config_value else ""
+        except Exception:
+            return ""
 
     def cleanup(self, remove_stopped: bool = False, remove_dangling: bool = False,
                 remove_cache: bool = False, vulhub_root: str = None) -> dict:
