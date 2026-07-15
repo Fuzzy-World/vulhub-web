@@ -4,6 +4,8 @@
     <strong>Web-based Vulnerability Lab Management Platform</strong>
     <br>
     Zero-config import · One-click lifecycle · Real-time monitoring
+    <br><br>
+    <a href="README.zh-CN.md">中文文档</a>
   </p>
 </p>
 
