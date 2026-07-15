@@ -53,12 +53,12 @@ Designed for security researchers, penetration testers, and educators who need t
 ### Installation
 
 ```bash
-# 1. Clone Vulhub (the vulnerability environments)
-git clone https://github.com/vulhub/vulhub.git /opt/vulhub
+# 1. Clone Vulhub (the vulnerability environments) — separate repo
+git clone https://github.com/vulhub/vulhub.git ~/work/vulhub
 
-# 2. Clone Vulhub-Web (the management platform)
-git clone https://github.com/Fuzzy-World/vulhub-web.git
-cd vulhub-web
+# 2. Clone Vulhub-Web (the management platform) — sibling to vulhub
+git clone https://github.com/Fuzzy-World/vulhub-web.git ~/work/Vulhub-Web
+cd ~/work/Vulhub-Web
 
 # 3. Create virtual environment
 python -m venv venv
@@ -71,24 +71,31 @@ pip install -r requirements.txt
 python run.py
 ```
 
-Open `http://localhost:8088`, set admin password, then go to Settings and set **Vulhub Root Path** to your Vulhub clone directory (e.g. `/opt/vulhub`).
+Open `http://localhost:8088`, set admin password, then go to Settings and set **Vulhub Root Path** to `../vulhub` (relative path works since they're siblings).
 
 ### Docker Deployment
 
-Vulhub-Web image does **not** include Vulhub itself. You must mount it from the host:
+Vulhub-Web image does **not** include Vulhub itself. Use the sibling directory layout:
+
+```
+~/work/
+├── vulhub/        ← git clone https://github.com/vulhub/vulhub
+└── Vulhub-Web/    ← this repo
+    └── docker-compose.yml
+```
+
+Then from inside `Vulhub-Web/`:
 
 ```bash
-# Build and run with docker-compose (edit vulhub path first)
 docker compose up -d
+```
 
-# Or run manually
-docker run -d \
-  --name vulhub-web \
-  -p 8088:8088 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /path/to/vulhub:/vulhub:ro \
-  -v ./data:/app/data \
-  vulhub-web
+This mounts:
+- `../vulhub` → `/vulhub` (read-only) inside the container
+- `/var/run/docker.sock` → host Docker socket
+- `./data` → SQLite persistence
+
+Open `http://localhost:8088` and set **Vulhub Root Path** to `/vulhub` in Settings.
   -e VULHUB_ROOT_PATH=/vulhub \
   vulhub-web
 ```
