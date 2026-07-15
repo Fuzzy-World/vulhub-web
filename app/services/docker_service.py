@@ -3,6 +3,7 @@ import asyncio
 import subprocess
 import shutil
 import os
+import yaml
 import logging
 
 logger = logging.getLogger(__name__)
@@ -52,25 +53,35 @@ class DockerService:
             images = self.client.images.list()
             containers = self.client.containers.list(all=True)
 
-            # Filter to Vulhub-related images only
-            vulhub_images = [
-                i for i in images
-                if any("vulhub/" in (t or "") for t in i.tags)
-            ]
-            dangling = [i for i in images if not i.tags]
+            # Build a set of image identifiers that belong to Vulhub
+            vulhub_image_refs = self._get_vulhub_image_refs(vulhub_root)
+            vulhub_image_ids = set()
 
-            # Filter to Vulhub-related containers only
             vulhub_containers = []
-            non_vulhub_containers = []
             for c in containers:
                 labels = c.labels or {}
                 compose_dir = labels.get("com.docker.compose.project.working_dir", "")
                 if vulhub_root and compose_dir and compose_dir.startswith(vulhub_root):
                     vulhub_containers.append(c)
-                else:
-                    non_vulhub_containers.append(c)
+                    try:
+                        vulhub_image_ids.add(c.image.id)
+                    except Exception:
+                        pass
             running = [c for c in vulhub_containers if c.status == "running"]
             stopped = [c for c in vulhub_containers if c.status != "running"]
+
+            # Filter images: by ID (used by vulhub containers) OR by name reference
+            vulhub_images = []
+            for img in images:
+                if img.id in vulhub_image_ids:
+                    vulhub_images.append(img)
+                    continue
+                for tag in img.tags or []:
+                    name = tag.split(":")[0] if ":" in tag else tag
+                    if name in vulhub_image_refs or "vulhub/" in tag:
+                        vulhub_images.append(img)
+                        break
+            dangling = [i for i in images if not i.tags]
 
             disk_usage = 0
             try:
@@ -91,6 +102,35 @@ class DockerService:
                 "running_containers": 0, "stopped_containers": 0,
                 "dangling_images": 0, "error": str(e),
             }
+
+    def _get_vulhub_image_refs(self, vulhub_root: str) -> set:
+        """Scan all docker-compose.yml under vulhub_root, return set of image name prefixes.
+
+        For explicit image: refs, returns the name part (e.g. 'redis' for 'redis:5.7').
+        For build: . refs, returns the docker-compose default tag pattern:
+        '<dirname>-<service_name>' (e.g. 's2-009-struts2').
+        """
+        if not vulhub_root or not os.path.isdir(vulhub_root):
+            return set()
+        refs = set()
+        for dirpath, _, filenames in os.walk(vulhub_root):
+            for fn in ("docker-compose.yml", "docker-compose.yaml"):
+                if fn in filenames:
+                    path = os.path.join(dirpath, fn)
+                    project = os.path.basename(dirpath)
+                    try:
+                        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                            data = yaml.safe_load(f) or {}
+                        for svc_name, svc in (data.get("services") or {}).items():
+                            img = svc.get("image")
+                            if img:
+                                refs.add(img.split(":")[0])
+                            if svc.get("build") is not None:
+                                # docker compose default tag: <project>-<service>
+                                refs.add(f"{project}-{svc_name}")
+                    except Exception:
+                        pass
+        return refs
 
     @staticmethod
     def _get_vulhub_root() -> str:
